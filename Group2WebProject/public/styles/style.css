@@ -1,0 +1,16 @@
+body{
+    margin: auto;
+    width: 60%;
+    background-color: #363636;
+    color: darkorange;
+    text-align: center;
+}
+img{
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 50%;
+}
+a{
+    color: darkorange;
+}
