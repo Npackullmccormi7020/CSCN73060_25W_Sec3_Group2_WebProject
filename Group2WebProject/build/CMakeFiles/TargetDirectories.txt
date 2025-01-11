@@ -1,0 +1,3 @@
+/Shared/build/CMakeFiles/Group2WebProject.dir
+/Shared/build/CMakeFiles/edit_cache.dir
+/Shared/build/CMakeFiles/rebuild_cache.dir
