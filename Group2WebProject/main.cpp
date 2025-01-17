@@ -2,78 +2,264 @@
 
 #include "crow_all.h"
 #include <iostream>
-using namespace std;
-using namespace crow;
+#include <sqlite3.h>
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <sstream>
 
-void sendFile(response &res, string filename, string contentType)
-{
-	ifstream in("../public/" + filename, ifstream::in);
-	if (in)
-    {
-        ostringstream contents;
-        contents << in.rdbuf();
-        in.close();
-        res.set_header("Content-Type", contentType);
-        res.write(contents.str());
+using json = nlohmann::json;
+
+// Function to initialize the SQLite database
+void initDatabase(sqlite3*& db) {
+    const char* createTableSQL = R"SQL(
+        CREATE TABLE IF NOT EXISTS appointments (
+            id TEXT PRIMARY KEY,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
+            service TEXT NOT NULL,
+            date TEXT NOT NULL,
+            time TEXT NOT NULL
+        );
+    )SQL";
+
+    char* errMsg = nullptr;
+    if (sqlite3_exec(db, createTableSQL, nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        std::cerr << "Error creating table: " << errMsg << std::endl;
+        sqlite3_free(errMsg);
     }
-    else
-    {
+}
+
+// Function to serve static files
+void sendFile(crow::response& res, const std::string& path, const std::string& contentType) {
+    std::string fullPath = "/Shared/public/" + path;
+    std::ifstream file(fullPath, std::ios::in);
+    std::cout << "Attempting to serve file: " << fullPath << std::endl;
+    if (file) {
+        std::ostringstream content;
+        content << file.rdbuf();
+        file.close();
+        res.set_header("Content-Type", contentType);
+        res.write(content.str());
+    }
+    else {
+        std::cerr << "File not found: " << fullPath << std::endl;
         res.code = 404;
-        res.write("NotFound");
+        res.write("File not found");
     }
     res.end();
 }
 
-void sendHtml(response &res, string filename)
-{
-    sendFile(res, filename + ".html", "text/html");
-}
+int main() {
+    crow::SimpleApp app;
+    sqlite3* db;
 
-void sendImage(response &res, string filename)
-{
-    sendFile(res, "images/" + filename, "image/jpeg");
-}
+    // Open SQLite database
+    if (sqlite3_open("appointments.db", &db) != SQLITE_OK) {
+        std::cerr << "Failed to open database: " << sqlite3_errmsg(db) << std::endl;
+        return 1;
+    }
+    initDatabase(db);
 
-void sendStyle(response &res, string filename)
-{
-	sendFile(res, "styles/" + filename, "text/css");
-}
+    // Route to serve the index page
+    CROW_ROUTE(app, "/")
+        ([](const crow::request&, crow::response& res) {
+        sendFile(res, "index.html", "text/html");
+            });
 
-void sendScript(response &res, string filename)
-{
-	sendFile(res, "scripts/" + filename, "text/javascript");
-}
+    // Route to serve the booking page
+    CROW_ROUTE(app, "/book")
+        ([](const crow::request&, crow::response& res) {
+        sendFile(res, "book.html", "text/html");
+            });
+
+    // Route to serve the manage appointments page
+    CROW_ROUTE(app, "/manage")
+        ([](const crow::request&, crow::response& res) {
+        sendFile(res, "manage.html", "text/html");
+            });
+
+    // Route to serve CSS files
+    CROW_ROUTE(app, "/styles.css")
+        ([](const crow::request&, crow::response& res) {
+        sendFile(res, "styles.css", "text/css");
+            });
+
+    // Route to serve JS files for booking
+    CROW_ROUTE(app, "/scripts/book.js")
+        ([](const crow::request&, crow::response& res) {
+        sendFile(res, "scripts/book.js", "application/javascript");
+            });
+
+    // Route to serve JS files for managing
+    CROW_ROUTE(app, "/scripts/manage.js")
+        ([](const crow::request&, crow::response& res) {
+        sendFile(res, "scripts/manage.js", "application/javascript");
+            });
+
+    // Route to handle appointment booking
+    CROW_ROUTE(app, "/appointments").methods("POST"_method)([&](const crow::request& req) {
+        try {
+            auto body = json::parse(req.body);
+            std::string id = body["id"];
+            std::string first_name = body["first_name"];
+            std::string last_name = body["last_name"];
+            std::string service = body["service"];
+            std::string date = body["date"];
+            std::string time = body["time"];
+
+            std::string sql = "INSERT INTO appointments (id, first_name, last_name, service, date, time) VALUES (?, ?, ?, ?, ?, ?);";
+            sqlite3_stmt* stmt;
+            sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+            sqlite3_bind_text(stmt, 1, id.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 2, first_name.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 3, last_name.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 4, service.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 5, date.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 6, time.c_str(), -1, SQLITE_TRANSIENT);
+
+            if (sqlite3_step(stmt) != SQLITE_DONE) {
+                sqlite3_finalize(stmt);
+                return crow::response(500, "Failed to create appointment.");
+            }
+
+            sqlite3_finalize(stmt);
+            return crow::response(201, "Appointment created successfully.");
+        }
+        catch (const std::exception& e) {
+            return crow::response(400, "Invalid data: " + std::string(e.what()));
+        }
+        });
+
+    // Route to get an appointment by ID
+    CROW_ROUTE(app, "/appointments/<string>").methods("GET"_method)([&](const crow::request&, crow::response& res, const std::string& id) {
+        std::string sql = "SELECT * FROM appointments WHERE LOWER(id) = LOWER(?);";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+        sqlite3_bind_text(stmt, 1, id.c_str(), -1, SQLITE_TRANSIENT);
+
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            json appointment = {
+                {"id", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)))},
+                {"first_name", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)))},
+                {"last_name", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)))},
+                {"service", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)))},
+                {"date", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)))},
+                {"time", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)))}
+            };
+            sqlite3_finalize(stmt);
+            res.set_header("Content-Type", "application/json");
+            res.write(appointment.dump());
+        }
+        else {
+            sqlite3_finalize(stmt);
+            res.code = 404;
+            res.write("Appointment not found.");
+        }
+        res.end();
+        });
 
 
-int main()
-{
-	crow::SimpleApp app;
 
-	CROW_ROUTE(app, "/")
-	([](const request& req, response& res) {
-	sendHtml(res, "Index");
-	});
+    // Route to get an appointment by last name
+    CROW_ROUTE(app, "/appointments").methods("GET"_method)([&](const crow::request& req, crow::response& res) {
+        auto query_params = crow::query_string(req.url_params);
+        const char* last_name_param = query_params.get("last_name");
 
-	CROW_ROUTE(app, "/<string>")
-	([](const request& req, response& res, string filename) {
-	sendHtml(res, filename);
-	});
+        if (!last_name_param) {
+            res.code = 400;
+            res.write("Missing required parameter: last_name");
+            res.end();
+            return;
+        }
 
-	CROW_ROUTE(app, "/get_script/<string>")
-	([](const request& req, response& res, string filename) {
-	sendScript(res, filename);
-	});
+        std::string last_name = last_name_param;
+        std::string sql = "SELECT * FROM appointments WHERE LOWER(last_name) = LOWER(?);";
 
-	CROW_ROUTE(app, "/get_style/<string>")
-	([](const request& req, response& res, string filename) {
-	sendStyle(res, filename);
-	});
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+        sqlite3_bind_text(stmt, 1, last_name.c_str(), -1, SQLITE_TRANSIENT);
 
-	CROW_ROUTE(app, "/get_image/<string>")
-	([](const request& req, response& res, string filename) {
-	sendImage(res, filename);
-	});
+        json appointments = json::array();
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            json appointment = {
+                {"id", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)))},
+                {"first_name", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)))},
+                {"last_name", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)))},
+                {"service", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)))},
+                {"date", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)))},
+                {"time", std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)))}
+            };
+            appointments.push_back(appointment);
+        }
 
-	app.port(23500).multithreaded().run();
-	return 1;
+        sqlite3_finalize(stmt);
+
+        if (appointments.empty()) {
+            res.code = 404;
+            res.write("No appointments found for the given last name.");
+        }
+        else {
+            res.set_header("Content-Type", "application/json");
+            res.write(appointments.dump());
+        }
+
+        res.end();
+        });
+
+
+
+
+
+
+    // Route to update an appointment
+    CROW_ROUTE(app, "/appointments/<string>").methods("PUT"_method)([&](const crow::request& req, crow::response& res, const std::string& id) {
+        auto body = json::parse(req.body);
+        std::string sql = "UPDATE appointments SET service = ?, date = ?, time = ? WHERE id = ?";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+        sqlite3_bind_text(stmt, 1, body["service"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, body["date"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, body["time"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, id.c_str(), -1, SQLITE_TRANSIENT);
+
+        if (sqlite3_step(stmt) == SQLITE_DONE) {
+            sqlite3_finalize(stmt);
+            res.code = 200;
+            res.write("Appointment updated successfully.");
+        }
+        else {
+            sqlite3_finalize(stmt);
+            res.code = 500;
+            res.write("Failed to update appointment.");
+        }
+        res.end();
+        });
+
+
+
+
+    // Route to delete an appointment
+    CROW_ROUTE(app, "/appointments/<string>").methods("DELETE"_method)([&](const crow::request&, crow::response& res, const std::string& id) {
+        std::string sql = "DELETE FROM appointments WHERE id = ?";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+        sqlite3_bind_text(stmt, 1, id.c_str(), -1, SQLITE_TRANSIENT);
+
+        if (sqlite3_step(stmt) == SQLITE_DONE) {
+            sqlite3_finalize(stmt);
+            res.code = 200;
+            res.write("Appointment deleted successfully.");
+        }
+        else {
+            sqlite3_finalize(stmt);
+            res.code = 500;
+            res.write("Failed to delete appointment.");
+        }
+        res.end();
+        });
+
+    app.port(23500).multithreaded().run();
+    sqlite3_close(db);
+
+    return 0;
 }

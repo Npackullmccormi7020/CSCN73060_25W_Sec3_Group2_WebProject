@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Appointment</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="scripts/book.js"></script>
+
+</head>
+<body>
+    <header>
+        <h1>Book Appointment</h1>
+        <button id="home-button">Home</button>
+    </header>
+    <main>
+        <form id="book-appointment-form">
+            <label for="first_name">First Name:</label>
+            <input type="text" id="first_name" name="first_name" required>
+
+            <label for="last_name">Last Name:</label>
+            <input type="text" id="last_name" name="last_name" required>
+
+            <label for="service">Service:</label>
+            <input type="text" id="service" name="service" required>
+
+            <label for="date">Date:</label>
+            <input type="date" id="date" name="date" required>
+
+            <label for="time">Time:</label>
+            <input type="time" id="time" name="time" required>
+
+            <button type="submit">Book Appointment</button>
+        </form>
+    </main>
+    <script>
+        // Navigate to Home
+        document.querySelector('#home-button').addEventListener('click', () => {
+            window.location.href = '/';
+        });
+
+        // Handle form submission
+        document.querySelector('#book-appointment-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            // Generate a random appointment ID
+            const appointmentId = `APPT-${Math.floor(Math.random() * 1000000)}`;
+
+            // Gather form data
+            const formData = new FormData(event.target);
+            const appointment = {
+                id: appointmentId,
+                first_name: formData.get('first_name'),
+                last_name: formData.get('last_name'),
+                service: formData.get('service'),
+                date: formData.get('date'),
+                time: formData.get('time'),
+            };
+
+            // Send data to the server
+            const apiUrl = 'http://localhost:23500/appointments';
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(appointment),
+            });
+
+            if (response.ok) {
+                alert(`Appointment booked successfully! Appointment ID: ${appointmentId}`);
+                event.target.reset();
+            } else {
+                alert('Failed to book appointment.');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Appointments</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="scripts/manage.js" defer></script>
+</head>
+<body>
+    <header>
+        <h1>Manage Appointments</h1>
+        <button id="home-button" onclick="window.location.href = '/'">Home</button>
+    </header>
+    <main>
+        <form id="search-appointment-form">
+            <label for="search-method">Search By:</label>
+            <select id="search-method" required>
+                <option value="id">Appointment ID</option>
+                <option value="last_name">Last Name</option>
+            </select>
+            <input type="text" id="search-input" placeholder="Enter search value" required>
+            <button type="submit">Search</button>
+        </form>
+
+        <!-- Appointment Details -->
+        <div id="appointment-details" style="display: none;">
+            <h3>Appointment Details</h3>
+            <p><strong>Appointment ID:</strong> <span id="appointment-id"></span></p>
+            <p><strong>First Name:</strong> <span id="appointment-first-name"></span></p>
+            <p><strong>Last Name:</strong> <span id="appointment-last-name"></span></p>
+            <p><strong>Service:</strong> <span id="appointment-service"></span></p>
+            <p><strong>Date:</strong> <span id="appointment-date"></span></p>
+            <p><strong>Time:</strong> <span id="appointment-time"></span></p>
+        </div>
+    </main>
+</body>
+</html>
