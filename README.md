@@ -45,6 +45,8 @@ mkdir build
 
 cd build
 
+apt update
+
 apt-get install libasio-dev
 
 apt-get install -y nlohmann-json3-dev
