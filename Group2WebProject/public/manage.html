@@ -24,7 +24,7 @@
         </form>
 
         <!-- Appointment Details -->
-        <div id="appointment-details" style="display: none;">
+        <div id="appointment-details" style="display: none; margin-top: 2rem;">
             <h3>Appointment Details</h3>
             <p><strong>Appointment ID:</strong> <span id="appointment-id"></span></p>
             <p><strong>First Name:</strong> <span id="appointment-first-name"></span></p>
@@ -32,7 +32,24 @@
             <p><strong>Service:</strong> <span id="appointment-service"></span></p>
             <p><strong>Date:</strong> <span id="appointment-date"></span></p>
             <p><strong>Time:</strong> <span id="appointment-time"></span></p>
+            <button id="update-button">Update Appointment</button>
+            <button id="delete-button">Delete Appointment</button>
         </div>
+
+        <!-- Update Appointment Form -->
+        <form id="update-appointment-form" style="display: none; margin-top: 2rem;">
+            <h3>Update Appointment</h3>
+            <label for="update-service">Service:</label>
+            <input type="text" id="update-service" name="service" required>
+
+            <label for="update-date">Date:</label>
+            <input type="date" id="update-date" name="date" required>
+
+            <label for="update-time">Time:</label>
+            <input type="time" id="update-time" name="time" required>
+
+            <button type="submit">Save Changes</button>
+        </form>
     </main>
 </body>
 </html>
