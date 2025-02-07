@@ -247,8 +247,7 @@ int main() {
 
         if (sqlite3_step(stmt) == SQLITE_DONE) {
             sqlite3_finalize(stmt);
-            res.code = 200;
-            res.write("Appointment deleted successfully.");
+            res.code = 204;  // No content
         }
         else {
             sqlite3_finalize(stmt);
@@ -257,6 +256,60 @@ int main() {
         }
         res.end();
         });
+
+
+
+    // Route to partially update an appointment
+    CROW_ROUTE(app, "/appointments/<string>").methods("PUT"_method)([&](const crow::request& req, crow::response& res, const std::string& id) {
+        try {
+            auto body = json::parse(req.body);
+
+            // Debug print request body
+            std::cout << "Update request for ID: " << id << std::endl;
+            std::cout << "Received Data: " << body.dump() << std::endl;
+
+            std::string sql = "UPDATE appointments SET service = ?, date = ?, time = ? WHERE id = ?";
+            sqlite3_stmt* stmt;
+            sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+            sqlite3_bind_text(stmt, 1, body["service"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 2, body["date"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 3, body["time"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 4, id.c_str(), -1, SQLITE_TRANSIENT);
+
+            if (sqlite3_step(stmt) == SQLITE_DONE) {
+                sqlite3_finalize(stmt);
+                res.code = 200;
+                res.write("Appointment updated successfully.");
+            }
+            else {
+                std::cerr << "SQL Error: " << sqlite3_errmsg(db) << std::endl;
+                sqlite3_finalize(stmt);
+                res.code = 500;
+                res.write("Failed to update appointment.");
+            }
+        }
+        catch (const std::exception& e) {
+            std::cerr << "JSON Parse Error: " << e.what() << std::endl;
+            res.code = 400;
+            res.write("Invalid JSON format.");
+        }
+        res.end();
+        });
+
+
+    // Route to handle OPTIONS requests
+    CROW_ROUTE(app, "/appointments/<string>").methods("OPTIONS"_method)([](const crow::request&, crow::response& res, const std::string&) {
+        res.set_header("Allow", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+        res.code = 204; // No Content
+        res.end();
+        });
+
+    CROW_ROUTE(app, "/appointments").methods("OPTIONS"_method)([](const crow::request&, crow::response& res) {
+        res.set_header("Allow", "GET, POST, OPTIONS");
+        res.code = 204; // No Content
+        res.end();
+        });
+
 
     app.port(23500).multithreaded().run();
     sqlite3_close(db);
