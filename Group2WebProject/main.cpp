@@ -260,7 +260,7 @@ int main() {
 
 
     // Route to partially update an appointment
-    CROW_ROUTE(app, "/appointments/<string>").methods("PUT"_method)([&](const crow::request& req, crow::response& res, const std::string& id) {
+    CROW_ROUTE(app, "/appointments/<string>").methods("PATCH"_method)([&](const crow::request& req, crow::response& res, const std::string& id) {
         try {
             auto body = json::parse(req.body);
 
