@@ -212,28 +212,34 @@ int main() {
 
 
     // Route to update an appointment
-    CROW_ROUTE(app, "/appointments/<string>").methods("PUT"_method)([&](const crow::request& req, crow::response& res, const std::string& id) {
-        auto body = json::parse(req.body);
-        std::string sql = "UPDATE appointments SET service = ?, date = ?, time = ? WHERE id = ?";
-        sqlite3_stmt* stmt;
-        sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
-        sqlite3_bind_text(stmt, 1, body["service"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 2, body["date"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 3, body["time"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 4, id.c_str(), -1, SQLITE_TRANSIENT);
-
-        if (sqlite3_step(stmt) == SQLITE_DONE) {
-            sqlite3_finalize(stmt);
-            res.code = 200;
-            res.write("Appointment updated successfully.");
+    CROW_ROUTE(app, "/appointments/<string>").methods("PATCH"_method, "PUT"_method)([&](const crow::request& req, crow::response& res, const std::string& id) {
+        try {
+            auto body = json::parse(req.body);
+    
+            std::string sql = "UPDATE appointments SET service = ?, date = ?, time = ? WHERE id = ?";
+            sqlite3_stmt* stmt;
+            sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+            sqlite3_bind_text(stmt, 1, body["service"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 2, body["date"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 3, body["time"].get<std::string>().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 4, id.c_str(), -1, SQLITE_TRANSIENT);
+    
+            if (sqlite3_step(stmt) == SQLITE_DONE) {
+                sqlite3_finalize(stmt);
+                res.code = 200;
+                res.write("Appointment updated successfully.");
+            } else {
+                sqlite3_finalize(stmt);
+                res.code = 500;
+                res.write("Failed to update appointment.");
+            }
+        } catch (const std::exception& e) {
+            res.code = 400;
+            res.write("Invalid data: " + std::string(e.what()));
         }
-        else {
-            sqlite3_finalize(stmt);
-            res.code = 500;
-            res.write("Failed to update appointment.");
-        }
+    
         res.end();
-        });
+    });
 
 
 
